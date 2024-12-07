@@ -21,7 +21,7 @@ function Cards({
     >
       <Card bordered={true} style={cardStyle}>
         <h2>Current Balance</h2>
-        <p>₹{currentBalance}</p>
+        <p>${currentBalance}</p>
         <div className="btn btn-blue" style={{ margin: 0 }} onClick={reset}>
           Reset Balance
         </div>
@@ -29,7 +29,7 @@ function Cards({
 
       <Card bordered={true} style={cardStyle}>
         <h2>Total Income</h2>
-        <p>₹{income}</p>
+        <p>${income}</p>
         <div
           className="btn btn-blue"
           style={{ margin: 0 }}
@@ -41,7 +41,7 @@ function Cards({
 
       <Card bordered={true} style={cardStyle}>
         <h2>Total Expenses</h2>
-        <p>₹{expenses}</p>
+        <p>${expenses}</p>
         <div className="btn btn-blue" onClick={showExpenseModal}>
           Add Expense
         </div>
