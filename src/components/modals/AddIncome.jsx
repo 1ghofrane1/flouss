@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Card,
   Col,
@@ -17,6 +17,14 @@ function AddIncomeModal({
   onFinish,
 }) {
   const [form] = Form.useForm();
+  const [tags, setTags] = useState(["salary", "freelance", "investment"]); // Predefined tags
+
+  const handleAddCustomTag = (newTag) => {
+    if (newTag && !tags.includes(newTag)) {
+      setTags([...tags, newTag]);
+    }
+  };
+
   return (
     <Modal
       style={{ fontWeight: 600 }}
@@ -70,13 +78,48 @@ function AddIncomeModal({
           style={{ fontWeight: 600 }}
           label="Tag"
           name="tag"
-          rules={[{ required: true, message: "Please select a tag!" }]}
+          rules={[{ required: true, message: "Please select or input a tag!" }]}
         >
-          <Select className="select-input-2">
-            <Select.Option value="salary">Salary</Select.Option>
-            <Select.Option value="freelance">Freelance</Select.Option>
-            <Select.Option value="investment">Investment</Select.Option>
-            {/* Add more tags here */}
+          <Select
+            className="select-input-2"
+            placeholder="Select or add a tag"
+            dropdownRender={(menu) => (
+              <>
+                {menu}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    padding: 8,
+                  }}
+                >
+                  <Input
+                    placeholder="Add custom tag"
+                    onPressEnter={(e) => {
+                      handleAddCustomTag(e.target.value);
+                      e.target.value = "";
+                    }}
+                    style={{ flex: "auto", marginRight: 8 }}
+                  />
+                  <Button
+                    type="primary"
+                    onClick={(e) => {
+                      const input = e.target.previousSibling;
+                      handleAddCustomTag(input.value);
+                      input.value = "";
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+              </>
+            )}
+          >
+            {tags.map((tag) => (
+              <Select.Option key={tag} value={tag}>
+                {tag}
+              </Select.Option>
+            ))}
           </Select>
         </Form.Item>
         <Form.Item>

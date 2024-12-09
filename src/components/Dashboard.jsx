@@ -10,14 +10,26 @@ import Cards from "./Cards";
 import NoTransactions from "./NoTransactions";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../firebase";
-import { addDoc, collection, getDocs, query } from "firebase/firestore";
+import { addDoc, collection, getDocs, query, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import Loader from "./loader";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import { unparse } from "papaparse";
+import EditTransactionModal from "./modals/EditTransaction"; // Import the EditTransactionModal
 
 const Dashboard = () => {
   const [user] = useAuthState(auth);
+  const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
+  const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [income, setIncome] = useState(0);
+  const [expenses, setExpenses] = useState(0);
+  const [transactionToEdit, setTransactionToEdit] = useState(null);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
@@ -27,62 +39,40 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  // const sampleTransactions = [
-  // {
-  //   name: "Pay day",
-  //   type: "income",
-  //   date: "2023-01-15",
-  //   amount: 2000,
-  //   tag: "salary",
-  // },
-  // {
-  //   name: "Dinner",
-  //   type: "expense",
-  //   date: "2023-01-20",
-  //   amount: 500,
-  //   tag: "food",
-  // },
-  // {
-  //   name: "Books",
-  //   type: "expense",
-  //   date: "2023-01-25",
-  //   amount: 300,
-  //   tag: "education",
-  // },
-  // ];
-  const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
-  const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [currentBalance, setCurrentBalance] = useState(0);
-  const [income, setIncome] = useState(0);
-  const [expenses, setExpenses] = useState(0);
-
-  const navigate = useNavigate();
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
 
   const processChartData = () => {
     const balanceData = [];
     const spendingData = {};
-
+    const incomeData = {};
+  
     transactions.forEach((transaction) => {
       const monthYear = moment(transaction.date).format("MMM YYYY");
       const tag = transaction.tag;
-
+  
       if (transaction.type === "income") {
+        // Process income data
         if (balanceData.some((data) => data.month === monthYear)) {
-          balanceData.find((data) => data.month === monthYear).balance +=
-            transaction.amount;
+          balanceData.find((data) => data.month === monthYear).balance += transaction.amount;
         } else {
           balanceData.push({ month: monthYear, balance: transaction.amount });
         }
+  
+        if (incomeData[tag]) {
+          incomeData[tag] += transaction.amount;
+        } else {
+          incomeData[tag] = transaction.amount;
+        }
       } else {
+        // Process expenses data
         if (balanceData.some((data) => data.month === monthYear)) {
-          balanceData.find((data) => data.month === monthYear).balance -=
-            transaction.amount;
+          balanceData.find((data) => data.month === monthYear).balance -= transaction.amount;
         } else {
           balanceData.push({ month: monthYear, balance: -transaction.amount });
         }
-
+  
         if (spendingData[tag]) {
           spendingData[tag] += transaction.amount;
         } else {
@@ -90,16 +80,24 @@ const Dashboard = () => {
         }
       }
     });
-
+  
     const spendingDataArray = Object.keys(spendingData).map((key) => ({
       category: key,
       value: spendingData[key],
     }));
-
-    return { balanceData, spendingDataArray };
+  
+    const incomeDataArray = Object.keys(incomeData).map((key) => ({
+      category: key,
+      value: incomeData[key],
+    }));
+  
+    return { balanceData, spendingDataArray, incomeDataArray };
   };
+  
 
-  const { balanceData, spendingDataArray } = processChartData();
+  const { balanceData, spendingDataArray, incomeDataArray } = processChartData();
+
+
   const showExpenseModal = () => {
     setIsExpenseModalVisible(true);
   };
@@ -116,25 +114,46 @@ const Dashboard = () => {
     setIsIncomeModalVisible(false);
   };
 
-  useEffect(() => {
-    fetchTransactions();
-  }, []);
-
   const onFinish = (values, type) => {
-    const newTransaction = {
-      type: type,
-      date: moment(values.date).format("YYYY-MM-DD"),
-      amount: parseFloat(values.amount),
-      tag: values.tag,
-      name: values.name,
-    };
-
-    setTransactions([...transactions, newTransaction]);
-    setIsExpenseModalVisible(false);
-    setIsIncomeModalVisible(false);
-    addTransaction(newTransaction);
-    calculateBalance();
+    if (transactionToEdit) {
+      // Updating an existing transaction
+      const updatedTransaction = {
+        ...transactionToEdit, // Keep the current transaction's data
+        ...values, // Overwrite with new form data
+        type: transactionToEdit.type || type, // Use the existing type or fallback to the passed type
+        date: moment(values.date).format("YYYY-MM-DD"), // Ensure the date is correctly formatted
+      };
+  
+      // Ensure you're passing the transaction ID and updated data
+      if (transactionToEdit.id) {
+        updateTransaction(transactionToEdit.id, updatedTransaction); // Call the update function
+      } else {
+        console.error("Transaction ID is missing");
+      }
+  
+      setTransactionToEdit(null); // Reset the transaction being edited
+      setIsEditModalVisible(false); // Close the edit modal
+    } else {
+      // Adding a new transaction
+      const newTransaction = {
+        type: type, // Specify the type (income or expense)
+        date: moment(values.date).format("YYYY-MM-DD"),
+        amount: parseFloat(values.amount),
+        tag: values.tag,
+        name: values.name,
+      };
+  
+      addTransaction(newTransaction); // Call the add function
+      if (type === "income") {
+        setIsIncomeModalVisible(false); // Close income modal
+      } else if (type === "expense") {
+        setIsExpenseModalVisible(false); // Close expense modal
+      }
+    }
+  
+    calculateBalance(); // Recalculate balance after adding or updating
   };
+  
 
   const calculateBalance = () => {
     let incomeTotal = 0;
@@ -153,7 +172,6 @@ const Dashboard = () => {
     setCurrentBalance(incomeTotal - expensesTotal);
   };
 
-  // Calculate the initial balance, income, and expenses
   useEffect(() => {
     calculateBalance();
   }, [transactions]);
@@ -181,10 +199,10 @@ const Dashboard = () => {
     if (user) {
       const q = query(collection(db, `users/${user.uid}/transactions`));
       const querySnapshot = await getDocs(q);
-      let transactionsArray = [];
-      querySnapshot.forEach((doc) => {
-        transactionsArray.push(doc.data());
-      });
+      const transactionsArray = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
       setTransactions(transactionsArray);
       toast.success("Transactions Fetched!");
     } else {
@@ -192,6 +210,63 @@ const Dashboard = () => {
     }
     setLoading(false);
   }
+
+  const onDeleteTransaction = async (transactionId) => {
+    try {
+      const transactionRef = doc(db, `users/${user.uid}/transactions`, transactionId);
+      await deleteDoc(transactionRef);
+      setTransactions((prevTransactions) =>
+        prevTransactions.filter((transaction) => transaction.id !== transactionId)
+      );
+      toast.success("Transaction deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      toast.error("Couldn't delete the transaction");
+    }
+  };
+
+  const onEditTransaction = (id) => {
+    const transactionToEdit = transactions.find((transaction) => transaction.id === id);
+    console.log("Transaction to edit: ", transactionToEdit);  // Debugging step
+  
+    if (transactionToEdit) {
+      setTransactionToEdit(transactionToEdit);  // Set the transaction to edit
+      setIsEditModalVisible(true);  // Open the modal to edit
+    } else {
+      console.error("Transaction not found");
+    }
+  };
+  
+  
+  const updateTransaction = async (transactionId, updatedTransaction) => {
+    if (!transactionId || typeof transactionId !== 'string') {
+      console.error("Invalid transaction ID:", transactionId);
+      toast.error("Invalid transaction ID");
+      return;
+    }
+  
+    if (!user || !user.uid) {
+      console.error("User not authenticated");
+      toast.error("User not authenticated");
+      return;
+    }
+  
+    try {
+      const transactionRef = doc(db, `users/${user.uid}/transactions`, transactionId);
+      await updateDoc(transactionRef, updatedTransaction);
+      setTransactions((prevTransactions) =>
+        prevTransactions.map((transaction) =>
+          transaction.id === transactionId
+            ? { ...transaction, ...updatedTransaction }
+            : transaction
+        )
+      );
+      toast.success("Transaction updated successfully!");
+    } catch (e) {
+      console.error("Error updating document: ", e);
+      toast.error("Couldn't update transaction");
+    }
+  };
   
 
   const balanceConfig = {
@@ -204,11 +279,23 @@ const Dashboard = () => {
     data: spendingDataArray,
     angleField: "value",
     colorField: "category",
+    radius: 0.9, // Set a radius to make sure it's full
+    innerRadius: 0, // Full circle, no hole
+
+  };
+  
+  const incomeConfig = {
+    data: incomeDataArray,
+    angleField: "value",
+    colorField: "category",
+    pieStyle: { lineWidth: 0, stroke: "#fff" }, // Ensure no lines around the pie
+    radius: 0.8, // Set radius for full pie
   };
 
   function reset() {
     console.log("resetting");
   }
+
   const cardStyle = {
     boxShadow: "0px 0px 30px 8px rgba(227, 227, 227, 0.75)",
     margin: "2rem",
@@ -258,7 +345,14 @@ const Dashboard = () => {
             handleIncomeCancel={handleIncomeCancel}
             onFinish={onFinish}
           />
-          
+
+          <EditTransactionModal
+            isVisible={isEditModalVisible}
+            handleCancel={() => setIsEditModalVisible(false)}
+            transactionToEdit={transactionToEdit}
+            onSave={updateTransaction}
+          />
+
           {transactions.length === 0 ? (
             <NoTransactions />
           ) : (
@@ -270,21 +364,34 @@ const Dashboard = () => {
                 </Card>
 
                 <Card bordered={true} style={{ ...cardStyle, flex: 0.45 }}>
-                  <h2>Total Spending</h2>
-                  {spendingDataArray.length == 0 ? (
-                    <p>Seems like you haven't spent anything till now...</p>
-                  ) : (
-                    <Pie {...{ ...spendingConfig, data: spendingDataArray }} />
-                  )}
+                    <h2>Total Spending</h2>
+                    {spendingDataArray.length === 0 ? (
+                        <p>Seems like you haven't spent anything till now...</p>
+                    ) : (
+                        <Pie {...{ ...spendingConfig, data: spendingDataArray }} style={{ width: "100%", height: "100%" }} />
+                    )}
                 </Card>
+
+                <Card bordered={true} style={{ ...cardStyle, flex: 0.45 }}>
+                    <h2>Total Income</h2>
+                    {incomeDataArray.length === 0 ? (
+                        <p>No income data available...</p>
+                    ) : (
+                        <Pie {...{ ...incomeConfig, data: incomeDataArray }} />
+                    )}
+                </Card>
+
               </Row>
             </>
           )}
+
           <TransactionSearch
             transactions={transactions}
             exportToCsv={exportToCsv}
             fetchTransactions={fetchTransactions}
             addTransaction={addTransaction}
+            onDeleteTransaction={onDeleteTransaction}
+            onEditTransaction={onEditTransaction}
           />
         </>
       )}

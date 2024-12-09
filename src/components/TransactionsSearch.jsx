@@ -1,11 +1,10 @@
 import React, { useRef, useState } from "react";
-import { Input, Table, Select, Radio } from "antd";
-import { SearchOutlined } from "@ant-design/icons";
+import { Input, Table, Select, Radio, Button, Popconfirm } from "antd";
+import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import search from "../assets/search.svg";
 import { parse } from "papaparse";
 import { toast } from "react-toastify";
-import { useNavigate } from "react-router-dom";
-const { Search } = Input;
+
 const { Option } = Select;
 
 const TransactionSearch = ({
@@ -13,23 +12,21 @@ const TransactionSearch = ({
   exportToCsv,
   addTransaction,
   fetchTransactions,
+  onDeleteTransaction, // Prop from Dashboard for deleting a transaction
+  onEditTransaction,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTag, setSelectedTag] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sortKey, setSortKey] = useState("");
   const fileInput = useRef();
 
-  function importFromCsv(event) {
+  const importFromCsv = async (event) => {
     event.preventDefault();
     try {
       parse(event.target.files[0], {
         header: true,
         complete: async function (results) {
-          // Now results.data is an array of objects representing your CSV rows
           for (const transaction of results.data) {
-            // Write each transaction to Firebase, you can use the addTransaction function here
-            console.log("Transactions", transaction);
             const newTransaction = {
               ...transaction,
               amount: parseInt(transaction.amount),
@@ -44,8 +41,9 @@ const TransactionSearch = ({
     } catch (e) {
       toast.error(e.message);
     }
-  }
+  };
 
+  // Define table columns
   const columns = [
     {
       title: "Name",
@@ -72,16 +70,37 @@ const TransactionSearch = ({
       dataIndex: "tag",
       key: "tag",
     },
+    {
+      title: "Actions",
+      key: "actions",
+      render: (_, record) => (
+        <div style={{ display: "flex", gap: "10px" }}>
+          <Button
+            type="text"
+            icon={<EditOutlined />}
+            onClick={() => onEditTransaction(record.id)} // Calls the edit function
+          />
+          <Popconfirm
+            title="Are you sure you want to delete this transaction?"
+            onConfirm={() => onDeleteTransaction(record.id)} // Passes the `id` of the transaction
+            okText="Yes"
+            cancelText="No"
+          >
+            <Button type="text" icon={<DeleteOutlined />} danger />
+          </Popconfirm>
+        </div>
+      ),
+    },
   ];
 
+  // Filter and sort transactions
   const filteredTransactions = transactions.filter((transaction) => {
     const searchMatch = searchTerm
       ? transaction.name.toLowerCase().includes(searchTerm.toLowerCase())
       : true;
-    const tagMatch = selectedTag ? transaction.tag === selectedTag : true;
     const typeMatch = typeFilter ? transaction.type === typeFilter : true;
 
-    return searchMatch && tagMatch && typeMatch;
+    return searchMatch && typeMatch;
   });
 
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
@@ -94,29 +113,24 @@ const TransactionSearch = ({
     }
   });
 
-  const dataSource = sortedTransactions.map((transaction, index) => ({
-    key: index,
+  // Map transactions to table dataSource
+  const dataSource = sortedTransactions.map((transaction) => ({
+    key: transaction.id, // Use `id` as the unique key
     ...transaction,
   }));
 
   return (
-    <div
-      style={{
-        width: "100%",
-        padding: "0rem 2rem",
-      }}
-    >
+    <div style={{ width: "100%", padding: "0rem 2rem" }}>
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          gap: "1rem",
           alignItems: "center",
           marginBottom: "1rem",
         }}
       >
         <div className="input-flex">
-          <img src={search} width="16" />
+          <img src={search} width="16" alt="Search" />
           <input
             placeholder="Search by Name"
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -135,28 +149,16 @@ const TransactionSearch = ({
         </Select>
       </div>
 
-      {/* <Select
-        style={{ width: 200, marginRight: 10 }}
-        onChange={(value) => setSelectedTag(value)}
-        placeholder="Filter by tag"
-        allowClear
-      >
-        <Option value="food">Food</Option>
-        <Option value="education">Education</Option>
-        <Option value="office">Office</Option>
-      </Select> */}
       <div className="my-table">
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            width: "100%",
             marginBottom: "1rem",
           }}
         >
           <h2>My Transactions</h2>
-
           <Radio.Group
             className="input-radio"
             onChange={(e) => setSortKey(e.target.value)}
@@ -166,32 +168,15 @@ const TransactionSearch = ({
             <Radio.Button value="date">Sort by Date</Radio.Button>
             <Radio.Button value="amount">Sort by Amount</Radio.Button>
           </Radio.Group>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: "1rem",
-              width: "400px",
-            }}
-          >
-            <button className="btn" onClick={exportToCsv}>
-              Export to CSV
-            </button>
-            <label htmlFor="file-csv" className="btn btn-blue">
-              Import from CSV
-            </label>
-            <input
-              onChange={importFromCsv}
-              id="file-csv"
-              type="file"
-              accept=".csv"
-              required
-              style={{ display: "none" }}
-            />
-          </div>
         </div>
-
-        <Table columns={columns} dataSource={dataSource} />
+        <Table
+          columns={columns}
+          dataSource={dataSource} // Use the mapped dataSource
+          pagination={{
+            pageSize: 5,
+            showSizeChanger: false,
+          }}
+        />
       </div>
     </div>
   );
