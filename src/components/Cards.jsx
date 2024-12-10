@@ -22,7 +22,7 @@ function Cards({
       <Card bordered={true} style={cardStyle}>
         <h2>Current Balance</h2>
         <p>${currentBalance}</p>
-        <div className="btn btn-blue" style={{ margin: 0 }} onClick={reset}>
+        <div className="btn btn-blue" style={{ margin: 0   }} onClick={reset}>
           Reset Balance
         </div>
       </Card>

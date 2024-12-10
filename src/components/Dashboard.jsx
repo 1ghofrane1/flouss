@@ -16,9 +16,11 @@ import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import { unparse } from "papaparse";
 import EditTransactionModal from "./modals/EditTransaction"; // Import the EditTransactionModal
+import AppCalendar from "./AppCalendar";
 
 const Dashboard = () => {
   const [user] = useAuthState(auth);
+  const [events, setEvents] = useState([]); // State to hold events
   const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
   const [isIncomeModalVisible, setIsIncomeModalVisible] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -28,7 +30,60 @@ const Dashboard = () => {
   const [expenses, setExpenses] = useState(0);
   const [transactionToEdit, setTransactionToEdit] = useState(null);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [tags, setTags] = useState([]);
+
+  // Format transactions for calendar
+  const getFormattedEvents = () => {
+    // Group transactions by date
+    const groupedTransactions = transactions.reduce((acc, transaction) => {
+      const transactionDate = moment(transaction.date).format("YYYY-MM-DD");
   
+      if (!acc[transactionDate]) {
+        acc[transactionDate] = { income: 0, expense: 0 };
+      }
+  
+      if (transaction.type === "income") {
+        acc[transactionDate].income += transaction.amount;
+      } else {
+        acc[transactionDate].expense += transaction.amount;
+      }
+  
+      return acc;
+    }, {});
+  
+    // Convert the grouped transactions into events format
+    const formattedEvents = [];
+    
+    Object.keys(groupedTransactions).forEach((date) => {
+      const { income, expense } = groupedTransactions[date];
+  
+      if (income > 0) {
+        formattedEvents.push({
+          title: `+$${income.toFixed(2)}`,
+          start: new Date(date),
+          end: new Date(date),
+          income,
+          expense: 0,
+        });
+      }
+  
+      if (expense > 0) {
+        formattedEvents.push({
+          title: `-$${expense.toFixed(2)}`,
+          start: new Date(date),
+          end: new Date(date),
+          income: 0,
+          expense,
+        });
+      }
+    });
+  
+    return formattedEvents;
+  };
+  
+  
+  
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -43,15 +98,20 @@ const Dashboard = () => {
     fetchTransactions();
   }, []);
 
+  useEffect(() => {
+    const formattedEvents = getFormattedEvents();
+    setEvents(formattedEvents);
+  }, [transactions]);
+
   const processChartData = () => {
     const balanceData = [];
     const spendingData = {};
     const incomeData = {};
-  
+
     transactions.forEach((transaction) => {
       const monthYear = moment(transaction.date).format("MMM YYYY");
       const tag = transaction.tag;
-  
+
       if (transaction.type === "income") {
         // Process income data
         if (balanceData.some((data) => data.month === monthYear)) {
@@ -59,7 +119,7 @@ const Dashboard = () => {
         } else {
           balanceData.push({ month: monthYear, balance: transaction.amount });
         }
-  
+
         if (incomeData[tag]) {
           incomeData[tag] += transaction.amount;
         } else {
@@ -72,7 +132,7 @@ const Dashboard = () => {
         } else {
           balanceData.push({ month: monthYear, balance: -transaction.amount });
         }
-  
+
         if (spendingData[tag]) {
           spendingData[tag] += transaction.amount;
         } else {
@@ -80,23 +140,21 @@ const Dashboard = () => {
         }
       }
     });
-  
+
     const spendingDataArray = Object.keys(spendingData).map((key) => ({
       category: key,
       value: spendingData[key],
     }));
-  
+
     const incomeDataArray = Object.keys(incomeData).map((key) => ({
       category: key,
       value: incomeData[key],
     }));
-  
+
     return { balanceData, spendingDataArray, incomeDataArray };
   };
-  
 
   const { balanceData, spendingDataArray, incomeDataArray } = processChartData();
-
 
   const showExpenseModal = () => {
     setIsExpenseModalVisible(true);
@@ -115,6 +173,14 @@ const Dashboard = () => {
   };
 
   const onFinish = (values, type) => {
+    const formattedDate = moment(values.date).format("YYYY-MM-DD");
+    const newTransaction = {
+      ...values,
+      type: type || transactionToEdit?.type,
+      date: formattedDate,
+      amount: parseFloat(values.amount),
+    };
+
     if (transactionToEdit) {
       // Updating an existing transaction
       const updatedTransaction = {
@@ -123,14 +189,8 @@ const Dashboard = () => {
         type: transactionToEdit.type || type, // Use the existing type or fallback to the passed type
         date: moment(values.date).format("YYYY-MM-DD"), // Ensure the date is correctly formatted
       };
-  
-      // Ensure you're passing the transaction ID and updated data
-      if (transactionToEdit.id) {
-        updateTransaction(transactionToEdit.id, updatedTransaction); // Call the update function
-      } else {
-        console.error("Transaction ID is missing");
-      }
-  
+
+      updateTransaction(transactionToEdit.id, newTransaction);
       setTransactionToEdit(null); // Reset the transaction being edited
       setIsEditModalVisible(false); // Close the edit modal
     } else {
@@ -142,18 +202,21 @@ const Dashboard = () => {
         tag: values.tag,
         name: values.name,
       };
-  
+
       addTransaction(newTransaction); // Call the add function
+      // Add new tag if not already present
+      if (!tags.includes(values.tag)) {
+        setTags((prevTags) => [...prevTags, values.tag]);
+      }
       if (type === "income") {
         setIsIncomeModalVisible(false); // Close income modal
       } else if (type === "expense") {
         setIsExpenseModalVisible(false); // Close expense modal
       }
     }
-  
+
     calculateBalance(); // Recalculate balance after adding or updating
   };
-  
 
   const calculateBalance = () => {
     let incomeTotal = 0;
@@ -176,34 +239,38 @@ const Dashboard = () => {
     calculateBalance();
   }, [transactions]);
 
-  async function addTransaction(transaction, many) {
+  async function addTransaction(transaction) {
     try {
       const docRef = await addDoc(
-        collection(db, `users/${user.uid}/transactions`),
+        collection(db, `users/${user.uid}/transactions`),  // Fixed string interpolation
         transaction
       );
-      console.log("Document written with ID: ", docRef.id);
-      if (!many) {
-        toast.success("Transaction Added!");
-      }
+      setTransactions((prev) => [
+        ...prev,
+        { ...transaction, id: docRef.id }, // Add transaction to state
+      ]);
+      toast.success("Transaction Added!");
     } catch (e) {
-      console.error("Error adding document: ", e);
-      if (!many) {
-        toast.error("Couldn't add transaction");
-      }
+      console.error("Error adding transaction: ", e);
+      toast.error("Couldn't add transaction");
     }
   }
 
   async function fetchTransactions() {
     setLoading(true);
     if (user) {
-      const q = query(collection(db, `users/${user.uid}/transactions`));
+      const q = query(collection(db, `users/${user.uid}/transactions`)); // Fixed string interpolation
       const querySnapshot = await getDocs(q);
       const transactionsArray = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
       setTransactions(transactionsArray);
+      // Extract unique tags from transactions
+      const uniqueTags = Array.from(
+        new Set(transactionsArray.map((transaction) => transaction.tag))
+      );
+      setTags(uniqueTags);
       toast.success("Transactions Fetched!");
     } else {
       toast.error("User not authenticated!");
@@ -213,7 +280,7 @@ const Dashboard = () => {
 
   const onDeleteTransaction = async (transactionId) => {
     try {
-      const transactionRef = doc(db, `users/${user.uid}/transactions`, transactionId);
+      const transactionRef = doc(db, `users/${user.uid}/transactions`, transactionId); // Fixed string interpolation
       await deleteDoc(transactionRef);
       setTransactions((prevTransactions) =>
         prevTransactions.filter((transaction) => transaction.id !== transactionId)
@@ -228,7 +295,7 @@ const Dashboard = () => {
   const onEditTransaction = (id) => {
     const transactionToEdit = transactions.find((transaction) => transaction.id === id);
     console.log("Transaction to edit: ", transactionToEdit);  // Debugging step
-  
+
     if (transactionToEdit) {
       setTransactionToEdit(transactionToEdit);  // Set the transaction to edit
       setIsEditModalVisible(true);  // Open the modal to edit
@@ -236,38 +303,22 @@ const Dashboard = () => {
       console.error("Transaction not found");
     }
   };
-  
-  
+
   const updateTransaction = async (transactionId, updatedTransaction) => {
-    if (!transactionId || typeof transactionId !== 'string') {
-      console.error("Invalid transaction ID:", transactionId);
-      toast.error("Invalid transaction ID");
-      return;
-    }
-  
-    if (!user || !user.uid) {
-      console.error("User not authenticated");
-      toast.error("User not authenticated");
-      return;
-    }
-  
     try {
-      const transactionRef = doc(db, `users/${user.uid}/transactions`, transactionId);
+      const transactionRef = doc(db, `users/${user.uid}/transactions`, transactionId); // Fixed string interpolation
       await updateDoc(transactionRef, updatedTransaction);
-      setTransactions((prevTransactions) =>
-        prevTransactions.map((transaction) =>
-          transaction.id === transactionId
-            ? { ...transaction, ...updatedTransaction }
-            : transaction
+      setTransactions((prev) =>
+        prev.map((transaction) =>
+          transaction.id === transactionId ? { ...transaction, ...updatedTransaction } : transaction
         )
       );
-      toast.success("Transaction updated successfully!");
-    } catch (e) {
-      console.error("Error updating document: ", e);
+      toast.success("Transaction Updated!");
+    } catch (error) {
+      console.error("Error updating transaction:", error);
       toast.error("Couldn't update transaction");
     }
   };
-  
 
   const balanceConfig = {
     data: balanceData,
@@ -281,9 +332,10 @@ const Dashboard = () => {
     colorField: "category",
     radius: 0.9, // Set a radius to make sure it's full
     innerRadius: 0, // Full circle, no hole
+    color: ['#B03052'], // Apply your custom color for the expense section
 
   };
-  
+
   const incomeConfig = {
     data: incomeDataArray,
     angleField: "value",
@@ -317,6 +369,9 @@ const Dashboard = () => {
     link.click();
     document.body.removeChild(link);
   }
+
+  // Renaming 'events' to 'formattedEvents' to avoid conflict with props
+  const formattedEvents = getFormattedEvents();
 
   return (
     <div className="dashboard-container">
@@ -364,24 +419,39 @@ const Dashboard = () => {
                 </Card>
 
                 <Card bordered={true} style={{ ...cardStyle, flex: 0.45 }}>
-                    <h2>Total Spending</h2>
-                    {spendingDataArray.length === 0 ? (
-                        <p>Seems like you haven't spent anything till now...</p>
-                    ) : (
-                        <Pie {...{ ...spendingConfig, data: spendingDataArray }} style={{ width: "100%", height: "100%" }} />
-                    )}
+                  <h2>Total Spending</h2>
+                  {spendingDataArray.length === 0 ? (
+                    <p>Seems like you haven't spent anything till now...</p>
+                  ) : (
+                    <Pie {...{ ...spendingConfig, data: spendingDataArray }} style={{ width: "100%", height: "100%" }} />
+                  )}
                 </Card>
 
                 <Card bordered={true} style={{ ...cardStyle, flex: 0.45 }}>
-                    <h2>Total Income</h2>
-                    {incomeDataArray.length === 0 ? (
-                        <p>No income data available...</p>
-                    ) : (
-                        <Pie {...{ ...incomeConfig, data: incomeDataArray }} />
-                    )}
+                  <h2>Total Income</h2>
+                  {incomeDataArray.length === 0 ? (
+                    <p>No income data available...</p>
+                  ) : (
+                    <Pie {...{ ...incomeConfig, data: incomeDataArray }} />
+                  )}
                 </Card>
+                <Row gutter={16} style={{ width: "100%" }}>
+                  <Card
+                    bordered={true}
+                    style={{
+                      ...cardStyle,
+                      flex: 1, // Adjust flex if needed
+                      minWidth: "700px",  // Set a wider minimum width
+                      maxWidth: "100%",  // Ensure it expands to the max available width
+                    }}
+                  >
+                    
+                    <AppCalendar events={formattedEvents} style={{ width: "100%", height: "350px" }} />
+                  </Card>
+                </Row>
 
               </Row>
+
             </>
           )}
 

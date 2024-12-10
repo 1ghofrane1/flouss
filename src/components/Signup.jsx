@@ -113,14 +113,14 @@ const SignUpSignIn = () => {
         {flag ? (
           <div className="signup-signin-container">
             <h2 style={{ textAlign: "center" }}>
-              Log In on <span className="blue-text">Financely.</span>
+              Log In on <span className="blue-text">FLOUSSY.</span>
             </h2>
             <form onSubmit={signUpWithEmail}>
               <div className="input-wrapper">
                 <p>Email</p>
                 <input
                   type="email"
-                  placeholder="JohnDoe@gmail.com"
+                  placeholder="FoulenBenFoulen@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -130,7 +130,7 @@ const SignUpSignIn = () => {
                 <p>Password</p>
                 <input
                   type="password"
-                  placeholder="Example123"
+                  placeholder="pwdExample"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -161,20 +161,20 @@ const SignUpSignIn = () => {
                 cursor: "pointer",
               }}
             >
-              Or Don't Have An Account? Click Here.
+              Not A Member Yet? Click Here.
             </p>
           </div>
         ) : (
           <div className="signup-signin-container">
             <h2 style={{ textAlign: "center" }}>
-              Sign Up on <span className="blue-text">Financely.</span>
+              Sign Up on <span className="blue-text">FLOUSSY.</span>
             </h2>
             <form onSubmit={signUpWithEmail}>
               <div className="input-wrapper">
                 <p>Full Name</p>
                 <input
                   type="text"
-                  placeholder="John Doe"
+                  placeholder="Foulen Ben Foulen"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
@@ -183,7 +183,7 @@ const SignUpSignIn = () => {
                 <p>Email</p>
                 <input
                   type="email"
-                  placeholder="JohnDoe@gmail.com"
+                  placeholder="FoulenBenFoulen@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -193,7 +193,7 @@ const SignUpSignIn = () => {
                 <p>Password</p>
                 <input
                   type="password"
-                  placeholder="Example123"
+                  placeholder="pwdExample"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -203,7 +203,7 @@ const SignUpSignIn = () => {
                 <p>Confirm Password</p>
                 <input
                   type="password"
-                  placeholder="Example123"
+                  placeholder="pwdExample"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                 />
@@ -230,7 +230,7 @@ const SignUpSignIn = () => {
                 cursor: "pointer",
               }}
             >
-              Or Have An Account Already? Click Here
+              Already A Member? Click Here
             </p>
             {/* <button onClick={signInWithEmail}>
             Sign In with Email and Password

@@ -27,7 +27,7 @@ function AddIncomeModal({
 
   return (
     <Modal
-      style={{ fontWeight: 600 }}
+      style={{ fontWeight: 600}}
       title="Add Income"
       open={isIncomeModalVisible}
       onCancel={handleIncomeCancel}

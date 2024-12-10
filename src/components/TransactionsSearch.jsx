@@ -4,6 +4,8 @@ import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import search from "../assets/search.svg";
 import { parse } from "papaparse";
 import { toast } from "react-toastify";
+import '../App.css'; // or your specific CSS file
+
 
 const { Option } = Select;
 
